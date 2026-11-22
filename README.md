@@ -76,9 +76,9 @@ and conversation history.
 
 ## Deployment
 
-Frontend: Vercel
-Backend: Railway
-Database: Supabase
+Frontend: https://customer-support-chatbot-njxf.vercel.app
+Backend: https://customer-support-chatbot-production-78f9ba55.up.railway.app
+Database: https://yxawpdwrgqilykcwadrd.supabase.co
 
 ## Notes
 
