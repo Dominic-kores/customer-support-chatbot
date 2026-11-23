@@ -1,6 +1,5 @@
 
 import { randomUUID } from "node:crypto";
-import { pipeline } from "@huggingface/transformers";
 import { supabase } from "./clients.js";
 
 // Split on word boundaries with overlapping context.
@@ -21,35 +20,73 @@ export function chunkText(text, size = 120, overlap = 25) {
   return chunks;
 }
 
-// Local embedding model (runs on this machine, no API key needed).
-// Downloaded once on first use, then cached.
-export const EMBEDDING_DIMENSIONS = 384;
-let extractorPromise;
+// Gemini embeddings via the Gemini API.
+// gemini-embedding-001 supports 768, 1536 or 3072 dimensions.
+// 768 keeps storage small and fits pgvector's ivfflat index limit.
+export const EMBEDDING_DIMENSIONS = 768;
+const EMBEDDING_MODEL =
+  process.env.EMBEDDING_MODEL || "gemini-embedding-001";
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models";
 
-function getExtractor() {
-  extractorPromise ??= pipeline(
-    "feature-extraction",
-    process.env.EMBEDDING_MODEL || "Xenova/all-MiniLM-L6-v2"
-  );
-  return extractorPromise;
+// Gemini only normalizes 3072-dim vectors, so normalize the rest
+// ourselves to keep cosine similarity accurate.
+function normalize(vector) {
+  const norm = Math.hypot(...vector);
+  return norm === 0 ? vector : vector.map((v) => v / norm);
 }
 
-// Generate one 384-dimensional embedding.
-export async function embedText(text) {
-  const extractor = await getExtractor();
-  const output = await extractor(text, {
-    pooling: "mean",
-    normalize: true
-  });
+// Embed many texts in one request.
+// taskType: "RETRIEVAL_DOCUMENT" for stored chunks,
+//           "RETRIEVAL_QUERY" for user questions.
+export async function embedTexts(
+  texts,
+  taskType = "RETRIEVAL_DOCUMENT"
+) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
 
-  const vector = Array.from(output.data);
+  const response = await fetch(
+    `${GEMINI_API_URL}/${EMBEDDING_MODEL}:batchEmbedContents`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": process.env.GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        requests: texts.map((text) => ({
+          model: `models/${EMBEDDING_MODEL}`,
+          content: { parts: [{ text }] },
+          taskType,
+          outputDimensionality: EMBEDDING_DIMENSIONS
+        }))
+      })
+    }
+  );
 
-  if (vector.length !== EMBEDDING_DIMENSIONS) {
+  if (!response.ok) {
     throw new Error(
-      `Expected a ${EMBEDDING_DIMENSIONS}-dimensional vector`
+      `Gemini embedding failed (${response.status}): ${await response.text()}`
     );
   }
 
+  const { embeddings } = await response.json();
+
+  return embeddings.map(({ values }) => {
+    if (values.length !== EMBEDDING_DIMENSIONS) {
+      throw new Error(
+        `Expected a ${EMBEDDING_DIMENSIONS}-dimensional vector`
+      );
+    }
+    return normalize(values);
+  });
+}
+
+// Generate one embedding.
+export async function embedText(text, taskType) {
+  const [vector] = await embedTexts([text], taskType);
   return vector;
 }
 
@@ -66,11 +103,7 @@ export async function saveDocument({
   const chunks = chunkText(content);
 
   // Generate embeddings before changing the database.
-  const vectors = [];
-
-  for (const chunk of chunks) {
-    vectors.push(await embedText(chunk));
-  }
+  const vectors = await embedTexts(chunks, "RETRIEVAL_DOCUMENT");
 
   const { error: documentError } = await supabase
     .from("documents")

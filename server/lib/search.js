@@ -4,7 +4,7 @@ import { embedText } from "./documents.js";
 
 export async function searchDocuments(query) {
   // Step 1: Convert the question into an embedding.
-  const queryEmbedding = await embedText(query);
+  const queryEmbedding = await embedText(query, "RETRIEVAL_QUERY");
 
   // Step 2: Compare against stored embeddings.
   const { data, error } = await supabase.rpc(

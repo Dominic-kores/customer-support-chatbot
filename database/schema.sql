@@ -20,7 +20,7 @@ create table if not exists document_chunks (
   document_title text not null,
   content text not null,
   chunk_index int not null,
-  embedding vector(384),
+  embedding vector(768),
   created_at timestamptz default now()
 );
 
@@ -74,7 +74,7 @@ create table if not exists support_tickets (
 
 -- 6. Vector similarity matching
 create or replace function match_documents(
-  query_embedding vector(384),
+  query_embedding vector(768),
   match_count int default 4,
   match_threshold float default 0.3
 )

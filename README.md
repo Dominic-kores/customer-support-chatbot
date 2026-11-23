@@ -7,7 +7,7 @@ for a fictional Kenyan electronics retailer.
 ## Project Objectives
 
 - Build a full-stack React and Express application.
-- Implement RAG using OpenAI embeddings and Supabase.
+- Implement RAG using Gemini embeddings and Supabase.
 - Generate grounded customer support answers with Claude.
 - Stream AI responses using Server-Sent Events.
 - Implement AI tool calling for orders and products.
@@ -21,7 +21,7 @@ for a fictional Kenyan electronics retailer.
 - React, Vite and Tailwind CSS
 - Node.js and Express
 - Anthropic Claude
-- OpenAI text-embedding-3-small
+- Google Gemini gemini-embedding-001 (768 dims)
 - Supabase PostgreSQL and pgvector
 - Resend
 - Vercel and Railway
